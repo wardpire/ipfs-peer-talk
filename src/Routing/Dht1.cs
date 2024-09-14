@@ -1,5 +1,6 @@
 ﻿using Common.Logging;
 using Ipfs;
+using Ipfs.Core;
 using Ipfs.CoreApi;
 using PeerTalk.Protocols;
 using ProtoBuf;
@@ -28,20 +29,22 @@ namespace PeerTalk.Routing
         /// <inheritdoc />
         public SemVersion Version { get; } = new SemVersion(1, 0);
 
+        public required IStoreFactory StoreFactory { get; set; }
+
         /// <summary>
         ///   Provides access to other peers.
         /// </summary>
-        public Swarm Swarm { get; set; }
+        public required Swarm Swarm { get; set; }
 
         /// <summary>
         ///  Routing information on peers.
         /// </summary>
-        public RoutingTable RoutingTable;
+        public RoutingTable RoutingTable = default!;
 
         /// <summary>
         ///   Peers that can provide some content.
         /// </summary>
-        public ContentRouter ContentRouter;
+        public ContentRouter ContentRouter = default!;
 
         /// <summary>
         ///   The number of closer peers to return.
@@ -55,7 +58,7 @@ namespace PeerTalk.Routing
         ///   Raised when the DHT is stopped.
         /// </summary>
         /// <seealso cref="StopAsync"/>
-        public event EventHandler Stopped;
+        public event EventHandler Stopped = default!;
 
         /// <inheritdoc />
         public override string ToString()
