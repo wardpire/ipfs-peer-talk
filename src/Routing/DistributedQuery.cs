@@ -17,7 +17,7 @@ namespace PeerTalk.Routing
     /// <typeparam name="T">
     ///  The type of answer returned by a peer.
     /// </typeparam>
-    public class DistributedQuery<T> where T : class
+    public class DistributedQuery
     {
         private static readonly ILog log = LogManager.GetLogger("PeerTalk.Routing.DistributedQuery");
         private static int nextQueryId = 1;
@@ -44,14 +44,8 @@ namespace PeerTalk.Routing
         private CancellationTokenSource runningQuery;
 
         private readonly ConcurrentDictionary<Peer, Peer> visited = new();
-        private readonly ConcurrentDictionary<T, T> answers = new();
-        private DhtMessage queryMessage;
+        private readonly ConcurrentDictionary<DhtMessage, DhtMessage> answers = new();
         private int failedConnects = 0;
-
-        /// <summary>
-        ///   Raised when an answer is obtained.
-        /// </summary>
-        public event EventHandler<T> AnswerObtained;
 
         /// <summary>
         ///   The unique identifier of the query.
@@ -61,7 +55,7 @@ namespace PeerTalk.Routing
         /// <summary>
         ///   The received answers for the query.
         /// </summary>
-        public IEnumerable<T> Answers
+        public IEnumerable<DhtMessage> Answers
         {
             get
             {
@@ -96,16 +90,6 @@ namespace PeerTalk.Routing
         public Dht1 Dht { get; set; }
 
         /// <summary>
-        ///   The type of query to perform.
-        /// </summary>
-        public MessageType QueryType { get; set; }
-
-        /// <summary>
-        ///   The key to find.
-        /// </summary>
-        public MultiHash QueryKey { get; set; }
-
-        /// <summary>
         ///   Starts the distributed query.
         /// </summary>
         /// <param name="cancel">
@@ -114,28 +98,20 @@ namespace PeerTalk.Routing
         /// <returns>
         ///   A task that represents the asynchronous operation.
         /// </returns>
-        public async Task RunAsync(CancellationToken cancel)
+        public async IAsyncEnumerable<DhtMessage> RunAsync(MultiHash targetKey, DhtMessage queryMessage, CancellationToken cancel)
         {
-            log.Debug($"Q{Id} run {QueryType} {QueryKey}");
+            log.Debug($"Q{Id} run {queryMessage.Key} {targetKey}");
 
             runningQuery = CancellationTokenSource.CreateLinkedTokenSource(cancel);
             Dht.Stopped += OnDhtStopped;
-            queryMessage = new DhtMessage
-            {
-                Type = QueryType,
-                Key = QueryKey?.ToArray(),
-            };
 
             var tasks = Enumerable
                 .Range(1, ConcurrencyLevel)
-                .Select(i => { var id = i; return AskAsync(id); });
+                .Select(id => AskAsync(id, targetKey, queryMessage));
             try
             {
-                await Task.WhenAll(tasks).ConfigureAwait(false);
-            }
-            catch
-            {
-                // eat it
+                await foreach (var result in tasks.Merge().WithCancellation(cancel))
+                    yield return result;
             }
             finally
             {
@@ -153,7 +129,7 @@ namespace PeerTalk.Routing
         /// <summary>
         ///   Ask the next peer the question.
         /// </summary>
-        private async Task AskAsync(int taskId)
+        private async IAsyncEnumerable<DhtMessage> AskAsync(int taskId, MultiHash targetKey, DhtMessage queryMessage)
         {
             int pass = 0;
             int waits = 20;
@@ -161,7 +137,7 @@ namespace PeerTalk.Routing
             {
                 // Get the nearest peer that has not been visited.
                 var peer = Dht.RoutingTable
-                    .NearestPeers(QueryKey)
+                    .NearestPeers(targetKey)
                     .FirstOrDefault(p => !visited.ContainsKey(p));
                 if (peer == null)
                 {
@@ -180,6 +156,7 @@ namespace PeerTalk.Routing
                 await askCount.WaitAsync(runningQuery.Token).ConfigureAwait(false);
                 var start = DateTime.Now;
                 log.Debug($"Q{Id}.{taskId}.{pass} ask {peer}");
+                DhtMessage? response = default;
                 try
                 {
                     using (var timeout = new CancellationTokenSource(askTime))
@@ -189,17 +166,14 @@ namespace PeerTalk.Routing
                         // Send the KAD query and get a response.
                         ProtoBuf.Serializer.SerializeWithLengthPrefix(stream, queryMessage, PrefixStyle.Base128);
                         await stream.FlushAsync(cts.Token).ConfigureAwait(false);
-                        var response = await ProtoBufHelper.ReadMessageAsync<DhtMessage>(stream, cts.Token).ConfigureAwait(false);
-
-                        // Process answer
-                        ProcessProviders(response.ProviderPeers);
-                        ProcessCloserPeers(response.CloserPeers);
+                        response = await ProtoBufHelper.ReadMessageAsync<DhtMessage>(stream, cts.Token).ConfigureAwait(false);
                     }
                     var time = DateTime.Now - start;
                     log.Debug($"Q{Id}.{taskId}.{pass} ok {peer} ({time.TotalMilliseconds} ms)");
                 }
                 catch (Exception e)
                 {
+                    response = default;
                     Interlocked.Increment(ref failedConnects);
                     var time = DateTime.Now - start;
                     log.Warn($"Q{Id}.{taskId}.{pass} failed ({time.TotalMilliseconds} ms) - {e.Message}");
@@ -209,52 +183,8 @@ namespace PeerTalk.Routing
                 {
                     askCount.Release();
                 }
-            }
-        }
-
-        private void ProcessProviders(DhtPeerMessage[] providers)
-        {
-            if (providers == null)
-                return;
-
-            foreach (var provider in providers)
-            {
-                if (provider.TryToPeer(out Peer p))
-                {
-                    if (p == Dht.Swarm.LocalPeer || !Dht.Swarm.IsAllowed(p))
-                        continue;
-
-                    p = Dht.Swarm.RegisterPeer(p);
-                    if (QueryType == MessageType.GetProviders)
-                    {
-                        // Only unique answers
-                        var answer = p as T;
-                        if (!answers.ContainsKey(answer))
-                        {
-                            AddAnswer(answer);
-                        }
-                    }
-                }
-            }
-        }
-
-        private void ProcessCloserPeers(DhtPeerMessage[] closerPeers)
-        {
-            if (closerPeers == null)
-                return;
-            foreach (var closer in closerPeers)
-            {
-                if (closer.TryToPeer(out Peer p))
-                {
-                    if (p == Dht.Swarm.LocalPeer || !Dht.Swarm.IsAllowed(p))
-                        continue;
-
-                    p = Dht.Swarm.RegisterPeer(p);
-                    if (QueryType == MessageType.FindNode && QueryKey == p.Id)
-                    {
-                        AddAnswer(p as T);
-                    }
-                }
+                if (AddAnswer(response))
+                    yield return response!;
             }
         }
 
@@ -266,22 +196,22 @@ namespace PeerTalk.Routing
         /// </param>
         /// <remarks>
         /// </remarks>
-        public void AddAnswer(T answer)
+        private bool AddAnswer(DhtMessage? answer)
         {
             if (answer == null)
-                return;
+                return false;
             if (runningQuery?.IsCancellationRequested == true)
-                return;
+                return false;
 
             if (answers.TryAdd(answer, answer))
             {
                 if (answers.Count >= AnswersNeeded && runningQuery?.IsCancellationRequested == false)
                 {
                     runningQuery.Cancel(false);
+                    return false;
                 }
             }
-
-            AnswerObtained?.Invoke(this, answer);
+            return true;
         }
     }
 }

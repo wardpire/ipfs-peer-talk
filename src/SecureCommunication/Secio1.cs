@@ -71,7 +71,7 @@ namespace PeerTalk.SecureCommunication
             // =============================================================================
             // step 1.1 Identify -- get identity from their key
             var remoteProposal = ProtoBuf.Serializer.DeserializeWithLengthPrefix<Secio1Propose>(stream, PrefixStyle.Fixed32BigEndian);
-            var ridAlg = (remoteProposal.PublicKey.Length <= 48) ? "identity" : "sha2-256";
+            var ridAlg = (remoteProposal.PublicKey.Length <= 48) ? AlgorithmNames.identity : AlgorithmNames.sha2_256;
             var remoteId = MultiHash.ComputeHash(remoteProposal.PublicKey, ridAlg);
             if (remotePeer.Id == null)
             {
@@ -90,7 +90,7 @@ namespace PeerTalk.SecureCommunication
             //   order := bytes.Compare(oh1, oh2)
             byte[] oh1;
             byte[] oh2;
-            using (var hasher = MultiHash.GetHashAlgorithm("sha2-256"))
+            using (var hasher = MultiHash.GetHashAlgorithm(AlgorithmNames.sha2_256))
             using (var ms = new MemoryStream())
             {
                 ms.Write(remoteProposal.PublicKey, 0, remoteProposal.PublicKey.Length);
@@ -98,7 +98,7 @@ namespace PeerTalk.SecureCommunication
                 ms.Position = 0;
                 oh1 = hasher.ComputeHash(ms);
             }
-            using (var hasher = MultiHash.GetHashAlgorithm("sha2-256"))
+            using (var hasher = MultiHash.GetHashAlgorithm(AlgorithmNames.sha2_256))
             using (var ms = new MemoryStream())
             {
                 ms.Write(localProposal.PublicKey, 0, localProposal.PublicKey.Length);

@@ -15,20 +15,8 @@ namespace PeerTalk.Routing
     ///   TODO
     /// </summary>
     [ProtoContract]
-    public class DhtRecordMessage
+    public class DhtRecordMessage : KeyValueBytesPair
     {
-        /// <summary>
-        ///   TODO
-        /// </summary>
-        [ProtoMember(1)]
-        public byte[] Key { get; set; }
-
-        /// <summary>
-        ///   TODO
-        /// </summary>
-        [ProtoMember(2)]
-        public byte[] Value { get; set; }
-
         /// <summary>
         ///   TODO
         /// </summary>
@@ -64,24 +52,29 @@ namespace PeerTalk.Routing
         GetValue = 1,
 
         /// <summary>
+        /// Find similar values
+        /// </summary>
+        FindSimilarValues = 2,
+
+        /// <summary>
         ///   Indicate that a peer can provide something.
         /// </summary>
-        AddProvider = 2,
+        AddProvider = 3,
 
         /// <summary>
         ///   Get the providers for something.
         /// </summary>
-        GetProviders = 3,
+        GetProviders = 4,
 
         /// <summary>
         ///   Find a peer.
         /// </summary>
-        FindNode = 4,
+        FindNode = 5,
 
         /// <summary>
         ///   NYI
         /// </summary>
-        Ping = 5
+        Ping = 6
     }
 
     /// <summary>

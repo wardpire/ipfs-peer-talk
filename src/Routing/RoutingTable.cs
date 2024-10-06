@@ -112,7 +112,7 @@ namespace PeerTalk.Routing
         /// <seealso href="https://github.com/libp2p/js-libp2p-kad-dht/issues/56#issuecomment-441378802"/>
         public static byte[] Key(MultiHash id)
         {
-            return MultiHash.ComputeHash(id.ToArray(), "sha2-256").Digest;
+            return MultiHash.ComputeHash(id.ToArray(), Ipfs.Registry.AlgorithmNames.sha2_256).Digest;
         }
     }
 }

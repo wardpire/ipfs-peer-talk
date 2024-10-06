@@ -61,7 +61,7 @@ namespace PeerTalk.Cryptography
             cipher.ProcessBytes(encrypted, 0, encrypted.Length, encrypted, 0);
 
             //
-            const string algotithmName = "shake-128";
+            const AlgorithmNames algotithmName = AlgorithmNames.shake_128;
 
             // Then do Shake-128 hash to reduce its length.
             // This way if for some reason Shake is broken and Salsa20 preimage is possible,

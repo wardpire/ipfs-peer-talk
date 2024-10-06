@@ -54,6 +54,7 @@
 		<PackageReference Include="protobuf-net" Version="3.2.30" />
 		<PackageReference Include="semver" Version="2.2.0" />
 		<PackageReference Include="SimpleBase" Version="4.0.0" />
+		<PackageReference Include="System.Interactive.Async" Version="6.0.1" />
 		<PackageReference Include="System.Threading.Tasks.Dataflow" Version="8.0.1" />
 		<PackageReference Include="Portable.BouncyCastle" Version="1.9.0" />
 		<PackageReference Include="IPNetwork2" Version="3.0.667" />
