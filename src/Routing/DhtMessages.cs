@@ -15,25 +15,37 @@ namespace PeerTalk.Routing
     ///   TODO
     /// </summary>
     [ProtoContract]
-    public class DhtRecordMessage : KeyValueBytesPair
+    public class DhtValueRecordMessage
     {
         /// <summary>
         ///   TODO
         /// </summary>
-        [ProtoMember(3)]
-        public byte[] Author { get; set; }
+        [ProtoMember(1)]
+        public string Namespace { get; set; }
 
         /// <summary>
         ///   TODO
         /// </summary>
-        [ProtoMember(4)]
-        public byte[] Signature { get; set; }
+        [ProtoMember(2)]
+        public byte[] Value { get; set; }
 
-        /// <summary>
-        ///   TODO
-        /// </summary>
-        [ProtoMember(5)]
-        public string TimeReceived { get; set; }
+        ///// <summary>
+        /////   TODO
+        ///// </summary>
+        //[ProtoMember(3)]
+        //public byte[] Author { get; set; }
+
+        ///// <summary>
+        /////   TODO
+        ///// </summary>
+        //[ProtoMember(4)]
+        //public byte[] Signature { get; set; }
+
+        ///// <summary>
+        /////   TODO
+        ///// </summary>
+        //[ProtoMember(5)]
+        //public string TimeReceived { get; set; }
     }
 
     /// <summary>
@@ -205,7 +217,7 @@ namespace PeerTalk.Routing
         ///   TODO
         /// </summary>
         [ProtoMember(3)]
-        public DhtRecordMessage Record { get; set; }
+        public DhtValueRecordMessage ValueRecord { get; set; }
 
         /// <summary>
         ///   The closer peers for a query.

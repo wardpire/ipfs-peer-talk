@@ -495,21 +495,24 @@ namespace PeerTalk.Routing
         /// </summary>
         private async Task<DhtMessage?> ProcessGetValueAsync(Peer remotePeer, DhtMessage request, DhtMessage response)
         {
-            if (request.Key == null || request.Record == null || request.Record.Key == null)
+            if (request.Key == null || request.ValueRecord == null || request.ValueRecord.Namespace == null)
             {
                 return null;
             }
 
-            Store.SetNamespace($"dht-values.{request.Key.ToBase32()}");
+            Store.SetNamespace($"DhtValues.{request.ValueRecord.Namespace}");
 
-            var val = await Store.TryGetAsync(new MultiHash(request.Record.Key));
+            var val = await Store.TryGetAsync(new MultiHash(request.Key));
 
             if (val == default)
                 return null;
 
             response.Key = request.Key;
-            response.Record.Key = request.Key;
-            response.Record.Value = val;
+            response.ValueRecord = new DhtValueRecordMessage()
+            {
+                Namespace = request.ValueRecord.Namespace,
+                Value = val
+            };
 
             // Also return the closest peers
             return ProcessFindNode(request, response);
@@ -520,14 +523,14 @@ namespace PeerTalk.Routing
         /// </summary>
         private async Task<DhtMessage?> ProcessPutValue(Peer remotePeer, DhtMessage request, DhtMessage response)
         {
-            if (request.Key == null || request.Record == null || request.Record.Key == null)
+            if (request.Key == null || request.ValueRecord == null || request.ValueRecord.Namespace == null)
             {
                 return null;
             }
 
-            Store.SetNamespace($"dht-values.{request.Key.ToBase32()}");
+            Store.SetNamespace($"DhtValues.{Encoding.UTF8.GetString(request.Key)}");
 
-            await Store.PutAsync(new MultiHash(request.Record.Key), request.Record.Value);
+            await Store.PutAsync(new MultiHash(request.ValueRecord.Namespace), request.ValueRecord.Value);
 
             // There is no response for this request.
             return null;
@@ -538,22 +541,29 @@ namespace PeerTalk.Routing
             throw new NotImplementedException();
         }
 
+        public async Task<string?> TryGetValueStringAsync(string @namespace, MultiHash key, CancellationToken cancellationToken)
+        {
+            var result = await TryGetValueAsync(@namespace, key, cancellationToken);
+            if (result == default)
+                return default;
+            return Encoding.UTF8.GetString(result);
+        }
+
         public async Task<byte[]?> TryGetValueAsync(string @namespace, MultiHash key, CancellationToken cancellationToken)
         {
-            Store.SetNamespace(@namespace);
+            Store.SetNamespace($"DhtValues.{@namespace}");
 
             var value = await Store.TryGetAsync(key);
 
             if (value == default)
             {
-                // Ask our peers for more providers.
                 var message = new DhtMessage()
                 {
                     Type = MessageType.GetValue,
-                    Key = @namespace.FromBase32(),
-                    Record = new DhtRecordMessage()
+                    Key = key.ToArray(),
+                    ValueRecord = new DhtValueRecordMessage()
                     {
-                        Key = key.ToArray()
+                        Namespace = @namespace
                     }
                 };
                 var dquery = new DistributedQuery
@@ -563,16 +573,19 @@ namespace PeerTalk.Routing
                 };
                 await foreach (var dhtMessage in dquery.RunAsync(key, message, cancellationToken).ConfigureAwait(false))
                 {
-                    value = dhtMessage.Record.Value;
+                    value = dhtMessage.ValueRecord.Value;
                 }
             }
 
             return value;
         }
 
+        public Task PutValueAsync(string @namespace, MultiHash key, string UTF8Value, CancellationToken cancellationToken = default)
+            => PutValueAsync(@namespace, key, Encoding.UTF8.GetBytes(UTF8Value), cancellationToken);
+
         public async Task PutValueAsync(string @namespace, MultiHash key, byte[] value, CancellationToken cancellationToken = default)
         {
-            Store.SetNamespace(@namespace);
+            Store.SetNamespace($"DhtValues.{@namespace}");
             await Store.PutAsync(key, value);
             var advertise = true;//maybe make parametric in future
             if (advertise)
@@ -581,10 +594,10 @@ namespace PeerTalk.Routing
                 new DhtMessage
                 {
                     Type = MessageType.PutValue,
-                    Key = @namespace.FromBase32(),
-                    Record = new DhtRecordMessage()
+                    Key = key.ToArray(),
+                    ValueRecord = new DhtValueRecordMessage()
                     {
-                        Key = key.ToArray(),
+                        Namespace = @namespace,
                         Value = value
                     }
                 }

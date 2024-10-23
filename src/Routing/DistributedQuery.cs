@@ -4,6 +4,7 @@ using ProtoBuf;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -183,35 +184,14 @@ namespace PeerTalk.Routing
                 {
                     askCount.Release();
                 }
-                if (AddAnswer(response))
-                    yield return response!;
-            }
-        }
-
-        /// <summary>
-        ///   Add a answer to the query.
-        /// </summary>
-        /// <param name="answer">
-        ///   An answer.
-        /// </param>
-        /// <remarks>
-        /// </remarks>
-        private bool AddAnswer(DhtMessage? answer)
-        {
-            if (answer == null)
-                return false;
-            if (runningQuery?.IsCancellationRequested == true)
-                return false;
-
-            if (answers.TryAdd(answer, answer))
-            {
-                if (answers.Count >= AnswersNeeded && runningQuery?.IsCancellationRequested == false)
+                if (response != default)
                 {
-                    runningQuery.Cancel(false);
-                    return false;
+                    if (answers.TryAdd(response, response))
+                        yield return response;
                 }
+                if (answers.Count >= AnswersNeeded && runningQuery?.IsCancellationRequested == false)
+                    await runningQuery.CancelAsync();
             }
-            return true;
         }
     }
 }
